@@ -24,15 +24,16 @@
 </template>
 
 <script type="text/babel">
+  import { hasClass } from 'element-ui/src/utils/dom';
+
   export default {
-    name: 'el-rate',
+    name: 'ElRate',
 
     data() {
       return {
         classMap: {},
         colorMap: {},
-        classes: null,
-        pointerAtLeftHalf: false,
+        pointerAtLeftHalf: true,
         currentValue: this.value,
         hoverIndex: -1
       };
@@ -97,7 +98,7 @@
       },
       textColor: {
         type: String,
-        default: '1f2d3d'
+        default: '#1f2d3d'
       },
       texts: {
         type: Array,
@@ -177,6 +178,7 @@
       value(val) {
         this.$emit('change', val);
         this.currentValue = val;
+        this.pointerAtLeftHalf = this.value !== Math.floor(this.value);
       }
     },
 
@@ -195,7 +197,11 @@
 
       showDecimalIcon(item) {
         let showWhenDisabled = this.disabled && this.valueDecimal > 0 && item - 1 < this.value && item > this.value;
-        let showWhenAllowHalf = this.allowHalf && this.pointerAtLeftHalf && ((item - 0.5).toFixed(1) === this.currentValue.toFixed(1));
+        /* istanbul ignore next */
+        let showWhenAllowHalf = this.allowHalf &&
+          this.pointerAtLeftHalf &&
+          item - 0.5 <= this.currentValue &&
+          item > this.currentValue;
         return showWhenDisabled || showWhenAllowHalf;
       },
 
@@ -221,12 +227,13 @@
         if (this.disabled) {
           return;
         }
+        /* istanbul ignore if */
         if (this.allowHalf) {
           let target = event.target;
-          if (target.classList.contains('el-rate__item')) {
+          if (hasClass(target, 'el-rate__item')) {
             target = target.querySelector('.el-rate__icon');
           }
-          if (target.classList.contains('el-rate__decimal')) {
+          if (hasClass(target, 'el-rate__decimal')) {
             target = target.parentNode;
           }
           this.pointerAtLeftHalf = event.offsetX * 2 <= target.clientWidth;

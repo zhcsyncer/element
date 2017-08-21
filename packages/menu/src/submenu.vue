@@ -1,12 +1,46 @@
+<template>
+  <li
+    :class="{
+      'el-submenu': true,
+      'is-active': active,
+      'is-opened': opened
+    }"
+    @mouseenter="handleMouseenter"
+    @mouseleave="handleMouseleave"
+  >
+    <div class="el-submenu__title" ref="submenu-title" @click="handleClick" :style="paddingStyle">
+      <slot name="title"></slot>
+      <i :class="{
+        'el-submenu__icon-arrow': true,
+        'el-icon-caret-bottom': rootMenu.mode === 'horizontal',
+        'el-icon-arrow-down': rootMenu.mode === 'vertical' && !rootMenu.collapse,
+        'el-icon-caret-right': rootMenu.mode === 'vertical' && rootMenu.collapse
+      }">
+      </i>
+    </div>
+    <template v-if="rootMenu.mode === 'horizontal' || (rootMenu.mode === 'vertical' && rootMenu.collapse)">
+      <transition :name="menuTransitionName">
+        <ul class="el-menu" v-show="opened"><slot></slot></ul>
+      </transition>
+    </template>
+    <el-collapse-transition v-else>
+      <ul class="el-menu" v-show="opened"><slot></slot></ul>
+    </el-collapse-transition>
+  </li>
+</template>
 <script>
-  import emitter from 'main/mixins/emitter';
+  import ElCollapseTransition from 'element-ui/src/transitions/collapse-transition';
+  import menuMixin from './menu-mixin';
+  import Emitter from 'element-ui/src/mixins/emitter';
 
-  module.exports = {
-    name: 'el-submenu',
+  export default {
+    name: 'ElSubmenu',
 
-    componentName: 'submenu',
+    componentName: 'ElSubmenu',
 
-    mixins: [emitter],
+    mixins: [menuMixin, Emitter],
+
+    components: { ElCollapseTransition },
 
     props: {
       index: {
@@ -14,119 +48,101 @@
         required: true
       }
     },
+
     data() {
       return {
-        opened: false,
         timeout: null,
-        active: false
+        items: {},
+        submenus: {}
       };
     },
     computed: {
-      indexPath() {
-        var path = [this.index];
-        var parent = this.$parent;
-        while (parent.$options._componentTag !== 'el-menu') {
-          if (parent.index) {
-            path.unshift(parent.index);
-          }
-          parent = parent.$parent;
-        }
-        return path;
+      menuTransitionName() {
+        return this.rootMenu.collapse ? 'el-zoom-in-left' : 'el-zoom-in-top';
       },
-      rootMenu() {
-        var parent = this.$parent;
-        while (parent.$options._componentTag !== 'el-menu') {
-          parent = parent.$parent;
-        }
-        return parent;
+      opened() {
+        return this.rootMenu.openedMenus.indexOf(this.index) > -1;
       },
-      mode() {
-        return this.rootMenu.mode;
+      active: {
+        cache: false,
+        get() {
+          let isActive = false;
+          const submenus = this.submenus;
+          const items = this.items;
+
+          Object.keys(items).forEach(index => {
+            if (items[index].active) {
+              isActive = true;
+            }
+          });
+
+          Object.keys(submenus).forEach(index => {
+            if (submenus[index].active) {
+              isActive = true;
+            }
+          });
+
+          return isActive;
+        }
       }
     },
     methods: {
+      addItem(item) {
+        this.$set(this.items, item.index, item);
+      },
+      removeItem(item) {
+        delete this.items[item.index];
+      },
+      addSubmenu(item) {
+        this.$set(this.submenus, item.index, item);
+      },
+      removeSubmenu(item) {
+        delete this.submenus[item.index];
+      },
       handleClick() {
-        if (this.mode === 'vertical') {
-          if (!this.opened) {
-            this.dispatch('menu', 'expand-menu', [this.index, this.indexPath]);
-            this.opened = true;
-          } else {
-            this.dispatch('menu', 'collapse-menu', [this.index, this.indexPath]);
-            this.opened = false;
-          }
+        const {rootMenu} = this;
+        if (
+          (rootMenu.menuTrigger === 'hover' && rootMenu.mode === 'horizontal') ||
+          (rootMenu.collapse && rootMenu.mode === 'vertical')
+        ) {
+          return;
         }
+        this.dispatch('ElMenu', 'submenu-click', this);
       },
       handleMouseenter() {
-        if (this.mode === 'horizontal') {
-          clearTimeout(this.timeout);
-          this.timeout = setTimeout(() => {
-            this.dispatch('menu', 'expand-menu', [this.index, this.indexPath]);
-            this.opened = true;
-          }, 300);
+        const {rootMenu} = this;
+        if (
+          (rootMenu.menuTrigger === 'click' && rootMenu.mode === 'horizontal') ||
+          (!rootMenu.collapse && rootMenu.mode === 'vertical')
+        ) {
+          return;
         }
+        clearTimeout(this.timeout);
+        this.timeout = setTimeout(() => {
+          this.rootMenu.openMenu(this.index, this.indexPath);
+        }, 300);
       },
       handleMouseleave() {
-        if (this.mode === 'horizontal') {
-          clearTimeout(this.timeout);
-          this.timeout = setTimeout(() => {
-            this.dispatch('menu', 'collapse-menu', [this.index, this.indexPath]);
-            this.opened = false;
-          }, 300);
+        const {rootMenu} = this;
+        if (
+          (rootMenu.menuTrigger === 'click' && rootMenu.mode === 'horizontal') ||
+          (!rootMenu.collapse && rootMenu.mode === 'vertical')
+        ) {
+          return;
         }
+        clearTimeout(this.timeout);
+        this.timeout = setTimeout(() => {
+          this.rootMenu.closeMenu(this.index, this.indexPath);
+        }, 300);
       }
     },
-    mounted() {
-      this.$on('close-menu', (openedIndexs) => {
-        if (openedIndexs && openedIndexs.indexOf(this.index) === -1) {
-          this.opened = false;
-        }
-      });
-      this.$on('open-menu', (IndexsArray) => {
-        if (IndexsArray && IndexsArray.indexOf(this.index) !== -1) {
-          this.opened = true;
-        }
-      });
-      this.$on('select', (index, indexPath) => {
-        if (this.mode === 'horizontal') {
-          this.active = indexPath.indexOf(this.index) !== -1;
-          this.opened = false;
-        }
-      });
+    created() {
+      this.parentMenu.addSubmenu(this);
+      this.rootMenu.addSubmenu(this);
     },
-    render(h) {
-      var submenu;
-
-      if (this.mode === 'horizontal') {
-        submenu = (
-          <transition name="md-fade-bottom">
-            {this.opened ? <ul class="el-menu">{this.$slots.default}</ul> : null }
-          </transition>
-        );
-      } else {
-        submenu = (
-          this.opened ? <ul class="el-menu">{this.$slots.default}</ul> : null
-        );
-      }
-
-      return (
-        <li
-          class={{ 'el-submenu': true, 'is-active': this.active, 'is-opened': this.opened}}
-          on-mouseenter={this.handleMouseenter}
-          on-mouseleave={this.handleMouseleave}
-        >
-          <div class="el-submenu__title" on-click={this.handleClick}>
-
-            {this.$slots.title}
-            <i class={{
-              'el-submenu__icon-arrow': true,
-              'el-icon-arrow-down': this.mode === 'vertical',
-              'el-icon-caret-bottom': this.mode === 'horizontal'
-            }}>
-            </i>
-          </div>
-          {submenu}
-        </li>
-      );
+    beforeDestroy() {
+      this.parentMenu.removeSubmenu(this);
+      this.rootMenu.removeSubmenu(this);
     }
   };
 </script>

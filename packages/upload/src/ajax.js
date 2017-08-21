@@ -1,5 +1,13 @@
 function getError(action, option, xhr) {
-  const msg = `cannot post ${action} ${xhr.status}'`;
+  let msg;
+  if (xhr.response) {
+    msg = `${xhr.status} ${xhr.response.error || xhr.response}`;
+  } else if (xhr.responseText) {
+    msg = `${xhr.status} ${xhr.responseText}`;
+  } else {
+    msg = `fail to post ${action} ${xhr.status}`;
+  }
+
   const err = new Error(msg);
   err.status = xhr.status;
   err.method = 'post';
@@ -20,12 +28,14 @@ function getBody(xhr) {
   }
 }
 
-export default function upload(action, option) {
+export default function upload(option) {
   if (typeof XMLHttpRequest === 'undefined') {
     return;
   }
 
   const xhr = new XMLHttpRequest();
+  const action = option.action;
+
   if (xhr.upload) {
     xhr.upload.onprogress = function progress(e) {
       if (e.total > 0) {
@@ -51,7 +61,7 @@ export default function upload(action, option) {
 
   xhr.onload = function onload() {
     if (xhr.status < 200 || xhr.status >= 300) {
-      return option.onError(getError(action, option, xhr), getBody(xhr));
+      return option.onError(getError(action, option, xhr));
     }
 
     option.onSuccess(getBody(xhr));
@@ -71,4 +81,5 @@ export default function upload(action, option) {
     }
   }
   xhr.send(formData);
+  return xhr;
 }

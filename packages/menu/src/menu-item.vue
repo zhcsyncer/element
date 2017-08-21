@@ -1,13 +1,45 @@
+<template>
+  <li class="el-menu-item"
+    :style="paddingStyle"
+    @click="handleClick"
+    :class="{
+      'is-active': active,
+      'is-disabled': disabled
+    }">
+    <el-tooltip
+      v-if="$parent === rootMenu && rootMenu.collapse"
+      effect="dark"
+      placement="right">
+      <div slot="content"><slot name="title"></slot></div>
+      <div style="position: absolute;left: 0;top: 0;height: 100%;width: 100%;display: inline-block;box-sizing: border-box;padding: 0 20px;">
+        <slot></slot>
+      </div>
+    </el-tooltip>
+    <template v-else>
+      <slot></slot>
+      <slot name="title"></slot>
+    </template>
+  </li>
+</template>
 <script>
-  module.exports = {
-    name: 'el-menu-item',
+  import Menu from './menu-mixin';
+  import Emitter from 'element-ui/src/mixins/emitter';
 
-    componentName: 'menu-item',
+  export default {
+    name: 'ElMenuItem',
+
+    componentName: 'ElMenuItem',
+
+    mixins: [Menu, Emitter],
 
     props: {
       index: {
         type: String,
         required: true
+      },
+      route: {
+        type: Object,
+        required: false
       },
       disabled: {
         type: Boolean,
@@ -15,45 +47,23 @@
       }
     },
     computed: {
-      indexPath() {
-        var path = [this.index];
-        var parent = this.$parent;
-        while (parent.$options._componentTag !== 'el-menu') {
-          if (parent.index) {
-            path.unshift(parent.index);
-          }
-          parent = parent.$parent;
-        }
-        return path;
-      },
-      rootMenu() {
-        var parent = this.$parent;
-        while (parent.$options._componentTag !== 'el-menu') {
-          parent = parent.$parent;
-        }
-        return parent;
-      },
       active() {
-        return this.index === this.rootMenu.activeIndex;
+        return this.index === this.rootMenu.activedIndex;
       }
     },
     methods: {
       handleClick() {
-        this.rootMenu.handleSelect(this.index, this.indexPath);
+        this.dispatch('ElMenu', 'item-click', this);
+        this.$emit('click', this);
       }
     },
-    mounted() {
+    created() {
+      this.parentMenu.addItem(this);
+      this.rootMenu.addItem(this);
+    },
+    beforeDestroy() {
+      this.parentMenu.removeItem(this);
+      this.rootMenu.removeItem(this);
     }
   };
 </script>
-
-<template>
-  <li class="el-menu-item"
-    @click="handleClick"
-    :class="{
-      'is-active': active,
-      'is-disabled': disabled
-    }">
-    <slot></slot>
-  </li>
-</template>
